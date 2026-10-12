@@ -29,18 +29,36 @@ from smoke_test import wait_for_health
 OUT = Path("capture")
 
 
-def collect_counts(base_url: str, samples: int = 5, timeout_sec: int = 60) -> list[dict]:
-    """dashboard が counting-service から取得して送ってくる count を samples 回分記録する"""
+def collect_counts(base_url: str, samples: int = 5, timeout_sec: int = 40) -> tuple[list[dict], str | None]:
+    """dashboard が counting-service から取得して送ってくる count を最大 samples 回分記録する。
+
+    socket.io（Engine.IO v3）はクライアントから ping を送らないとサーバーが接続を切るため、
+    受信を待つ間も定期的に ping（"2"）を送る。接続が切れたら、それまでの記録を返す。
+    戻り値: (記録, 途中で止まった理由。最後まで取れたら None)
+    """
     ws_url = base_url.replace("https://", "wss://").replace("http://", "ws://")
     ws_url += "/socket.io/?EIO=3&transport=websocket"
-    ws = websocket.create_connection(ws_url, timeout=10)
-    records = []
+    records: list[dict] = []
+    ping_every = 10.0
+    ws = websocket.create_connection(ws_url, timeout=2)
     try:
         deadline = time.time() + timeout_sec
+        next_ping = time.time() + ping_every
         while len(records) < samples and time.time() < deadline:
+            if time.time() >= next_ping:
+                ws.send("2")
+                next_ping = time.time() + ping_every
             try:
                 msg = ws.recv()
             except websocket.WebSocketTimeoutException:
+                continue
+            except Exception as e:  # 接続が切れたなど
+                return records, f"connection closed after {len(records)} counts: {e!r}"
+            # 接続直後の open パケット 0{"pingInterval":...} から ping 間隔を決める
+            if msg.startswith("0{"):
+                interval_ms = json.loads(msg[1:]).get("pingInterval", 25000)
+                ping_every = max(1.0, interval_ms / 1000 / 2)
+                next_ping = time.time() + ping_every
                 continue
             # socket.io のイベントは 42<ack id>["message", {...}] の形式で届く
             if not msg.startswith("42") or "[" not in msg:
@@ -53,7 +71,9 @@ def collect_counts(base_url: str, samples: int = 5, timeout_sec: int = 60) -> li
             print(f"... received {payload}")
     finally:
         ws.close()
-    return records
+    if len(records) < samples:
+        return records, f"only {len(records)} of {samples} counts received within {timeout_sec}s"
+    return records, None
 
 
 def take_screenshot(base_url: str, path: Path) -> str | None:
@@ -75,14 +95,19 @@ def take_screenshot(base_url: str, path: Path) -> str | None:
         return str(e)
 
 
-def build_summary(base_url: str, records: list[dict], screenshot_error: str | None) -> tuple[bool, str]:
+def build_summary(
+    base_url: str, records: list[dict], note: str | None, screenshot_error: str | None
+) -> tuple[bool, str]:
     counts = [r["count"] for r in records]
     ok = bool(records) and all(c >= 0 for c in counts)
     increasing = len(counts) > 1 and all(b > a for a, b in zip(counts, counts[1:]))
 
     lines = ["### Dashboard → counting-service capture", ""]
     if ok:
-        trend = "increasing ✅" if increasing else "not strictly increasing"
+        if len(counts) == 1:
+            trend = "only one sample"
+        else:
+            trend = "increasing ✅" if increasing else "not strictly increasing"
         lines.append(
             f"**Result: ✅ OK** — dashboard (`{base_url}`) received {len(counts)} counts "
             f"from counting-service ({counts[0]} → {counts[-1]}, {trend})"
@@ -91,6 +116,8 @@ def build_summary(base_url: str, records: list[dict], screenshot_error: str | No
         lines.append("**Result: ❌ NG** — no count received (dashboard cannot reach counting-service?)")
     else:
         lines.append("**Result: ❌ NG** — dashboard cannot reach counting-service (count = -1)")
+    if note:
+        lines += ["", f"Note: `{note[:300]}`"]
     lines += ["", "| # | time (UTC) | count | hostname | message |", "| --- | --- | --- | --- | --- |"]
     for i, r in enumerate(records, 1):
         lines.append(f"| {i} | {r['time']} | {r['count']} | {r.get('hostname', '-')} | {r.get('message', '-')} |")
@@ -113,11 +140,18 @@ if __name__ == "__main__":
     base = sys.argv[1].rstrip("/")
     OUT.mkdir(exist_ok=True)
 
-    wait_for_health(base)
-    records = collect_counts(base)
+    # どこで失敗しても、理由を書いた summary を必ず残す
+    records: list[dict] = []
+    note: str | None = None
+    try:
+        wait_for_health(base)
+        records, note = collect_counts(base)
+    except BaseException as e:
+        note = f"capture stopped: {e!r}"
+        print(f"NG  {note}")
     screenshot_error = take_screenshot(base, OUT / "dashboard.png")
 
-    ok, summary = build_summary(base, records, screenshot_error)
+    ok, summary = build_summary(base, records, note, screenshot_error)
     (OUT / "counts.json").write_text(json.dumps(records, indent=2, ensure_ascii=False), encoding="utf-8")
     (OUT / "summary.md").write_text(summary, encoding="utf-8")
     if os.environ.get("GITHUB_STEP_SUMMARY"):

@@ -36,11 +36,18 @@ jobs:
         run: docker compose logs || true
 
       # dashboard → counting-service の動作を記録（受け取った count の表を Summary に、画面・ログをアーティファクトに）
+      # スクリーンショット用のブラウザ。失敗しても count の記録は続ける
+      - name: Install browser for screenshot
+        if: success() || failure()
+        continue-on-error: true
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
       - name: Capture dashboard → counting
         if: success() || failure()
         run: |
-          pip install websocket-client playwright
-          python -m playwright install --with-deps chromium
+          pip install websocket-client
           python scripts/capture.py http://localhost:9002
 
       - name: Save container logs
