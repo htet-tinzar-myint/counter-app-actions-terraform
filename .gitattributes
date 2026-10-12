@@ -1,0 +1,5 @@
+# Windows でコミットしても、Linux（GitHub Actions）で動くファイルは LF のままにする
+* text=auto eol=lf
+
+# ビルド済みバイナリは改行変換しない
+services/*/bin/* binary

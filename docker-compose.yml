@@ -1,0 +1,36 @@
+# 2つのサービスをまとめて起動する（ローカル・CI・CD 共通）
+#   ブラウザ → dashboard-service（:9002）→ counting-service（:9003）
+#   counting-service はホストに公開せず、dashboard-service からだけ呼ばれる
+#
+#   docker compose up -d --build
+#   python scripts/smoke_test.py http://localhost:9002
+#   docker compose down
+#
+#   公開済みイメージ（ghcr.io）で動かす場合:
+#   COUNTING_IMAGE=ghcr.io/<owner>/<repo>/counting-service:latest \
+#   DASHBOARD_IMAGE=ghcr.io/<owner>/<repo>/dashboard-service:latest \
+#   docker compose up -d --no-build
+name: counter-app
+
+services:
+  counting:
+    build: services/counting-service
+    image: ${COUNTING_IMAGE:-counting-service:local}
+    environment:
+      PORT: "9003"
+    expose:
+      - "9003"
+    restart: unless-stopped
+
+  dashboard:
+    build: services/dashboard-service
+    image: ${DASHBOARD_IMAGE:-dashboard-service:local}
+    environment:
+      PORT: "9002"
+      # サービス名 counting で counting-service を呼ぶ（PORT と同じ番号にする）
+      COUNTING_SERVICE_URL: http://counting:9003
+    ports:
+      - "9002:9002"
+    depends_on:
+      - counting
+    restart: unless-stopped

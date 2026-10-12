@@ -1,0 +1,55 @@
+# CI: プルリクエストのたびに実行
+#   1. Docker イメージをビルドし、2つのサービスを起動して動作確認（スモークテスト）
+#   2. Terraform の書式・構文チェック
+# ここのジョブ名は main のルールセット（infra/github の required_status_checks）と一致させる
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  TF_VERSION: "1.16.1"
+
+jobs:
+  build-and-test:
+    name: Build & smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # docker-compose.yml でビルドし、dashboard(:9002) → counting(:9003) の構成で起動
+      - name: Build & run both services
+        run: docker compose up -d --build
+
+      # dashboard に WebSocket で接続し、counting-service のカウントが届くことを確認
+      - name: Smoke test
+        run: |
+          pip install websocket-client
+          python scripts/smoke_test.py http://localhost:9002
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs || true
+
+  terraform:
+    name: Terraform fmt / validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: fmt
+        run: terraform fmt -check -recursive infra
+
+      - name: validate (github)
+        working-directory: infra/github
+        run: |
+          terraform init -backend=false
+          terraform validate

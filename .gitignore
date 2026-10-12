@@ -1,0 +1,16 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+# GitHub 設定スタックの値は CI/CD が読むのでコミットする（秘密情報は書かない）
+!infra/github/settings.auto.tfvars
+*.tfstate.gpg
+.tfstate.sha256
+plan.txt
+crash.log
+*.tfplan
+
+# Python
+__pycache__/
