@@ -50,6 +50,7 @@
 │   └── github/      GitHub リポジトリの設定（Actions 変数・production 環境・main の保護）
 ├── scripts/
 │   ├── smoke_test.py   dashboard に WebSocket で接続し、count が届くか確認
+│   ├── capture.py      dashboard → counting の動作を記録（画面・受け取った count）
 │   └── tfstate.sh      Terraform state を暗号化して tfstate ブランチに保存・復元
 └── .github/workflows/
     ├── ci.yml       PR 時：ビルド → 2サービス起動 → スモークテスト／terraform fmt・validate
@@ -163,6 +164,17 @@ main への push では、`github.yml` と `cd.yml` が**同時に**始まり、
 ```
 
 初回の `github.yml` の実行後は、main への直接 push は管理者以外できなくなります。管理者は直接 push もできますが、`ci.yml` のチェックを通すために PR 経由で変更してください。
+
+## 動作の確認（キャプチャ）
+
+CI と CD の `Capture dashboard → counting` ステップが、dashboard が counting-service を呼べているかを記録します。ローカルで動かせなくても、GitHub 上で結果を確認できます。
+
+| 確認するもの | 場所 |
+| --- | --- |
+| 結果（✅ OK／❌ NG）と、受け取った count の表 | **Actions → (実行) → Summary** |
+| dashboard の画面（`dashboard.png`）・`counts.json`・コンテナのログ（`compose-logs.txt`） | 同じ Summary ページの一番下の **Artifacts → dashboard-capture** をダウンロード（14日間保存） |
+
+count が増えていれば、dashboard → counting-service の呼び出しが正しく動いています。count が `-1` や表が空の場合は NG（dashboard から counting-service に届いていない）です。
 
 ## 普段の開発の流れ
 

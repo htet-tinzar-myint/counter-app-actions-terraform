@@ -14,3 +14,6 @@ crash.log
 
 # Python
 __pycache__/
+
+# scripts/capture.py の出力
+capture/

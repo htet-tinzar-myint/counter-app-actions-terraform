@@ -35,6 +35,36 @@ jobs:
         if: failure()
         run: docker compose logs || true
 
+      # dashboard → counting-service の動作を記録（受け取った count の表を Summary に、画面・ログをアーティファクトに）
+      # スクリーンショット用のブラウザ。失敗しても count の記録は続ける
+      - name: Install browser for screenshot
+        if: success() || failure()
+        continue-on-error: true
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Capture dashboard → counting
+        if: success() || failure()
+        run: |
+          pip install websocket-client
+          python scripts/capture.py http://localhost:9002
+
+      - name: Save container logs
+        if: always()
+        run: |
+          mkdir -p capture
+          docker compose logs --no-color --timestamps > capture/compose-logs.txt || true
+
+      - name: Upload capture
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-capture
+          path: capture/
+          retention-days: 14
+          if-no-files-found: warn
+
   terraform:
     name: Terraform fmt / validate
     runs-on: ubuntu-latest
