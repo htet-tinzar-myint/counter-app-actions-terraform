@@ -103,6 +103,14 @@ When both are green, check:
 - [ ] **Branches:** a `tfstate` branch exists and contains `github.tfstate.gpg`
 - [ ] **Packages** (right side of the repo page): `counting-service` and `dashboard-service`
 
+Check that dashboard → counting-service works (from the **CD** run):
+
+- [ ] **Actions → CD → (run) → Summary** shows **Result: ✅ OK** and a table of counts going up
+- [ ] At the bottom of the same page, download **Artifacts → dashboard-capture** and open:
+  - `dashboard.png`: screenshot of the dashboard page
+  - `counts.json`: counts received from counting-service
+  - `compose-logs.txt`: logs of both containers
+
 ## Step 7: Try the normal flow (ci.yml)
 
 ```powershell
@@ -115,6 +123,7 @@ git push -u origin test-ci
 
 - [ ] On GitHub, click **Compare & pull request**
 - [ ] `ci.yml` runs (`Build & smoke test`, `Terraform fmt / validate`)
+- [ ] In the CI run's **Summary**, the capture shows **Result: ✅ OK** (same as step 6)
 - [ ] **Merge** becomes possible only after both checks pass
 - [ ] Merge the PR
 
@@ -139,6 +148,7 @@ git pull
 | `Upgrade to GitHub Pro or make this repository public` | The repo is private. Make it public. |
 | `GET .../users/htet-tinzar-myint: 404` | Fix the username in `production_reviewers` (`infra/github/settings.auto.tfvars`) |
 | Smoke test fails in CI | Open the failed job and read the `Show logs on failure` step |
+| Capture shows **❌ NG** | Download **dashboard-capture** and check `compose-logs.txt` for errors from counting-service or dashboard |
 | `github.yml` fails after a few months | The token expired. Create a new one (step 2) and update `GH_ADMIN_TOKEN` (step 3). |
 
 After fixing a failure, rerun it from **Actions → (failed run) → Re-run jobs**.

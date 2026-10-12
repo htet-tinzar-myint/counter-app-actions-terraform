@@ -10,6 +10,7 @@ on:
     paths:
       - "services/**"
       - "scripts/smoke_test.py"
+      - "scripts/capture.py"
       - "docker-compose.yml"
       - ".github/workflows/cd.yml"
   workflow_dispatch:
@@ -41,6 +42,29 @@ jobs:
       - name: Show logs on failure
         if: failure()
         run: docker compose logs || true
+
+      # dashboard → counting-service の動作を記録（受け取った count の表を Summary に、画面・ログをアーティファクトに）
+      - name: Capture dashboard → counting
+        if: success() || failure()
+        run: |
+          pip install websocket-client playwright
+          python -m playwright install --with-deps chromium
+          python scripts/capture.py http://localhost:9002
+
+      - name: Save container logs
+        if: always()
+        run: |
+          mkdir -p capture
+          docker compose logs --no-color --timestamps > capture/compose-logs.txt || true
+
+      - name: Upload capture
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-capture
+          path: capture/
+          retention-days: 14
+          if-no-files-found: warn
 
   publish:
     name: Publish (${{ matrix.service }})

@@ -50,6 +50,7 @@ Both binaries choose their listening port from the `PORT` environment variable. 
 │   └── github/      GitHub repository settings (Actions variables, production environment, main protection)
 ├── scripts/
 │   ├── smoke_test.py   Connects to dashboard over WebSocket and checks that a count arrives
+│   ├── capture.py      Records dashboard → counting working (screenshot, received counts)
 │   └── tfstate.sh      Encrypts the Terraform state and saves/restores it on the tfstate branch
 └── .github/workflows/
     ├── ci.yml       On PR: build → start both services → smoke test / terraform fmt・validate
@@ -163,6 +164,17 @@ On a push to main, `github.yml` and `cd.yml` start **at the same time**, and the
 ```
 
 After `github.yml` runs for the first time, only admins can push directly to main. Admins can still push directly, but make changes through pull requests so that `ci.yml` checks them first.
+
+## Checking that it works (capture)
+
+The `Capture dashboard → counting` step in CI and CD records whether dashboard can call counting-service. Even if you can't run it locally, you can check the result on GitHub.
+
+| What to check | Where |
+| --- | --- |
+| Result (✅ OK / ❌ NG) and the table of received counts | **Actions → (run) → Summary** |
+| Dashboard screenshot (`dashboard.png`), `counts.json`, container logs (`compose-logs.txt`) | Download **Artifacts → dashboard-capture** at the bottom of the same Summary page (kept for 14 days) |
+
+If the count goes up, the dashboard → counting-service call is working. If the count is `-1` or the table is empty, the result is NG (dashboard can't reach counting-service).
 
 ## Everyday development
 
